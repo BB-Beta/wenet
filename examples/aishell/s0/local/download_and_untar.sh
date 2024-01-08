@@ -3,6 +3,7 @@
 # Copyright   2014  Johns Hopkins University (author: Daniel Povey)
 #             2017  Xingyu Na
 # Apache 2.0
+# 主要任务是下载数据压缩包并解压缩
 
 remove_archive=false
 
@@ -18,15 +19,18 @@ if [ $# -ne 3 ]; then
   echo "<corpus-part> can be one of: data_aishell, resource_aishell."
 fi
 
+#这里data是数据根路径，url是下载地址，part是resource和data两个子文件夹，每次传入一个
 data=$1
 url=$2
 part=$3
 
+#是否存在文件夹
 if [ ! -d "$data" ]; then
   echo "$0: no such directory $data"
   exit 1;
 fi
 
+#检查part参数是否正确
 part_ok=false
 list="data_aishell resource_aishell"
 for x in $list; do
@@ -37,16 +41,19 @@ if ! $part_ok; then
   exit 1;
 fi
 
+#检测url是否为空,https://blog.csdn.net/phone1126/article/details/126365546
 if [ -z "$url" ]; then
   echo "$0: empty URL base."
   exit 1;
 fi
 
+#查看complete文件是否存在，存在则表示已经解压缩过了，结束即可，如果没有，则继续
 if [ -f $data/$part/.complete ]; then
   echo "$0: data part $part was already successfully extracted, nothing to do."
   exit 0;
 fi
 
+#检查压缩包文件大小是否符合预期
 # sizes of the archive files in bytes.
 sizes="15582913665 1246920"
 
@@ -63,6 +70,7 @@ if [ -f $data/$part.tgz ]; then
   fi
 fi
 
+#如果没有对应的压缩包，则执行下载
 if [ ! -f $data/$part.tgz ]; then
   if ! which wget >/dev/null; then
     echo "$0: wget is not installed."
@@ -80,13 +88,16 @@ fi
 
 cd $data
 
+#解压缩
 if ! tar -xvzf $part.tgz; then
   echo "$0: error un-tarring archive $data/$part.tgz"
   exit 1;
 fi
 
+#创建complete
 touch $data/$part/.complete
 
+#对子压缩包解压缩
 if [ $part == "data_aishell" ]; then
   cd $data/$part/wav
   for wav in ./*.tar.gz; do
@@ -97,6 +108,7 @@ fi
 
 echo "$0: Successfully downloaded and un-tarred $data/$part.tgz"
 
+#如果需要，则删掉总压缩包，看起来没有删掉子压缩包
 if $remove_archive; then
   echo "$0: removing $data/$part.tgz file since --remove-archive option was supplied."
   rm $data/$part.tgz

@@ -25,6 +25,7 @@ if __name__ == '__main__':
     parser.add_argument('output_file', help='output list file')
     args = parser.parse_args()
 
+    #读取wav文件，切分成key，audio path
     wav_table = {}
     with open(args.wav_file, 'r', encoding='utf8') as fin:
         for line in fin:
@@ -32,6 +33,7 @@ if __name__ == '__main__':
             assert len(arr) == 2
             wav_table[arr[0]] = arr[1]
 
+    #读取segment文件，每行包括key，wav_keystart，end
     if args.segments is not None:
         segments_table = {}
         with open(args.segments, 'r', encoding='utf8') as fin:
@@ -40,17 +42,21 @@ if __name__ == '__main__':
                 assert len(arr) == 4
                 segments_table[arr[0]] = (arr[1], float(arr[2]), float(arr[3]))
 
+    #读取text文件，打开输出文件
     with open(args.text_file, 'r', encoding='utf8') as fin, \
          open(args.output_file, 'w', encoding='utf8') as fout:
         for line in fin:
+            #text文件包括key，txt两部分
             arr = line.strip().split(maxsplit=1)
             key = arr[0]
             txt = arr[1] if len(arr) > 1 else ''
             if args.segments is None:
+                #如果没有segments，直接保存结果
                 assert key in wav_table
                 wav = wav_table[key]
                 line = dict(key=key, wav=wav, txt=txt)
             else:
+                #如果有segment，将key拆分为对应的数据，增加start，end参数
                 assert key in segments_table
                 wav_key, start, end = segments_table[key]
                 wav = wav_table[wav_key]

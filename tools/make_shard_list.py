@@ -29,6 +29,7 @@ import torchaudio.backend.sox_io_backend as sox
 AUDIO_FORMAT_SETS = set(['flac', 'mp3', 'm4a', 'ogg', 'opus', 'wav', 'wma'])
 
 
+#最终每个chunk会生成一个tar包，其中包含重采样后的每个条目一组的txt和wav文件
 def write_tar_file(data_list,
                    no_segments,
                    tar_file,
@@ -41,6 +42,7 @@ def write_tar_file(data_list,
     write_time = 0.0
     with tarfile.open(tar_file, "w") as tar:
         prev_wav = None
+        #遍历chunk内的每一条数据
         for item in data_list:
             if no_segments:
                 key, txt, wav = item
@@ -50,6 +52,7 @@ def write_tar_file(data_list,
             suffix = wav.split('.')[-1]
             assert suffix in AUDIO_FORMAT_SETS
             if no_segments:
+                #如果没有segment，打开文件，重采样，保存为wav，保存到data变量中
                 # read & resample
                 ts = time.time()
                 audio, sample_rate = sox.load(wav, normalize=False)
@@ -67,6 +70,7 @@ def write_tar_file(data_list,
                 data = f.read()
                 save_time += (time.time() - ts)
             else:
+                #如果有segment，则提取start到end之间的audio部分，重采样，并保存wav到data中
                 if wav != prev_wav:
                     ts = time.time()
                     waveforms, sample_rate = sox.load(wav, normalize=False)
@@ -98,6 +102,7 @@ def write_tar_file(data_list,
                 data = f.read()
                 save_time += (time.time() - ts)
 
+            #生成一个txt和wav文件，输出到tar文件中
             assert isinstance(txt, str)
             ts = time.time()
             txt_file = key + '.txt'
@@ -144,6 +149,8 @@ if __name__ == '__main__':
                         format='%(asctime)s %(levelname)s %(message)s')
 
     torch.set_num_threads(1)
+
+    #读取wav文件
     wav_table = {}
     with open(args.wav_file, 'r', encoding='utf8') as fin:
         for line in fin:
@@ -151,6 +158,7 @@ if __name__ == '__main__':
             assert len(arr) == 2
             wav_table[arr[0]] = arr[1]
 
+    #读取segment文件
     no_segments = True
     segments_table = {}
     if args.segments is not None:
@@ -161,6 +169,7 @@ if __name__ == '__main__':
                 assert len(arr) == 4
                 segments_table[arr[0]] = (arr[1], float(arr[2]), float(arr[3]))
 
+    #读取text文件，并将key，txt，wav路径都保存到data数组中
     data = []
     with open(args.text_file, 'r', encoding='utf8') as fin:
         for line in fin:
@@ -176,6 +185,7 @@ if __name__ == '__main__':
                 wav = wav_table[wav_key]
                 data.append((key, txt, wav, start, end))
 
+    #按照num_utts_per_shard对数据分组，并建立shards dir
     num = args.num_utts_per_shard
     chunks = [data[i:i + num] for i in range(0, len(data), num)]
     os.makedirs(args.shards_dir, exist_ok=True)
@@ -186,9 +196,11 @@ if __name__ == '__main__':
     tasks_list = []
     num_chunks = len(chunks)
     for i, chunk in enumerate(chunks):
+        #每个chunk对应一个tar_file文件
         tar_file = os.path.join(args.shards_dir,
                                 '{}_{:09d}.tar'.format(args.prefix, i))
         shards_list.append(tar_file)
+        #多进程异步生成对应的tar file
         pool.apply_async(
             write_tar_file,
             (chunk, no_segments, tar_file, args.resample, i, num_chunks))
@@ -196,6 +208,7 @@ if __name__ == '__main__':
     pool.close()
     pool.join()
 
+    #输出shards list参数
     with open(args.shards_list, 'w', encoding='utf8') as fout:
         for name in shards_list:
             fout.write(name + '\n')

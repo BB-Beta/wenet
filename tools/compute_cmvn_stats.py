@@ -63,7 +63,7 @@ class CollateFunc(object):
             number += mat.shape[0]
         return number, mean_stat, var_stat
 
-
+#torch数据集构建，从data_file中读取数据，并根据id返回
 class AudioDataset(Dataset):
 
     def __init__(self, data_file):

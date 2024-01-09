@@ -70,19 +70,21 @@ deepspeed_save_states="model_only"
 
 . tools/parse_options.sh || exit 1;
 
+#下载文件并解压
 if [ ${stage} -le -1 ] && [ ${stop_stage} -ge -1 ]; then
   echo "stage -1: Data Download"
   local/download_and_untar.sh ${data} ${data_url} data_aishell
   local/download_and_untar.sh ${data} ${data_url} resource_aishell
 fi
 
+#生成文件名到文本，以及audio的对应关系
 if [ ${stage} -le 0 ] && [ ${stop_stage} -ge 0 ]; then
   # Data preparation
   local/aishell_data_prep.sh ${data}/data_aishell/wav \
     ${data}/data_aishell/transcript
 fi
 
-
+#去掉中文的空格
 if [ ${stage} -le 1 ] && [ ${stop_stage} -ge 1 ]; then
   # remove the space between the text labels for Mandarin dataset
   for x in train dev test; do
@@ -93,11 +95,13 @@ if [ ${stage} -le 1 ] && [ ${stop_stage} -ge 1 ]; then
     rm data/${x}/text.org
   done
 
-  tools/compute_cmvn_stats.py --num_workers 16 --train_config $train_config \
+  #统计cmvn数据，将wav.scp文件中的audio作为输入，统计出整体fbank特征的cmvn，（均值，方差）
+  python tools/compute_cmvn_stats.py --num_workers 16 --train_config $train_config \
     --in_scp data/${train_set}/wav.scp \
     --out_cmvn data/$train_set/global_cmvn
 fi
 
+# 生成token列表，如果有空格的话还要有space，如果有英文的话还要设置trans_type参数，这里由于全都是汉字，所以默认用trans_type = char类型就行了，这里是按照单字生成的token，并提供了序号，dict/lang_char.txt
 if [ ${stage} -le 2 ] && [ ${stop_stage} -ge 2 ]; then
   echo "Make a dictionary"
   mkdir -p $(dirname $dict)
@@ -109,6 +113,7 @@ if [ ${stage} -le 2 ] && [ ${stop_stage} -ge 2 ]; then
     awk '{print $0 " " NR+2}' >> ${dict}
 fi
 
+# 生成data.list，这里根据指定类型生成shart或者raw，如果是raw，将wav和txt文件合并到json即可，如果是shard，中间还有对原始音频文件的重采样
 if [ ${stage} -le 3 ] && [ ${stop_stage} -ge 3 ]; then
   echo "Prepare data, prepare required format"
   for x in dev test ${train_set}; do
@@ -123,17 +128,22 @@ if [ ${stage} -le 3 ] && [ ${stop_stage} -ge 3 ]; then
   done
 fi
 
+#执行训练
 if [ ${stage} -le 4 ] && [ ${stop_stage} -ge 4 ]; then
+  #创建模型保存文件夹
   mkdir -p $dir
+  #读取gpu数量
   num_gpus=$(echo $CUDA_VISIBLE_DEVICES | awk -F "," '{print NF}')
   # Use "nccl" if it works, otherwise use "gloo"
   # NOTE(xcsong): deepspeed fails with gloo, see
   #   https://github.com/microsoft/DeepSpeed/issues/2818
+  # nccl是英伟达的gpu多卡通信框架
   dist_backend="nccl"
 
   # train.py rewrite $train_config to $dir/train.yaml with model input
   # and output dimension, and $dir/train.yaml will be used for inference
   # and export.
+  # deepspeed是微软开发的并行训练工具，ddp是torch支持的多卡训练工具
   if [ ${train_engine} == "deepspeed" ]; then
     echo "$0: using deepspeed"
   else
@@ -156,6 +166,7 @@ if [ ${stage} -le 4 ] && [ ${stop_stage} -ge 4 ]; then
   #               without NCCL_SOCKET_IFNAME=enp  (IFNAME could be get by `ifconfig`)
   #                   RuntimeError: The server socket has failed to listen on any local network address. The server socket has failed to bind to [::]:xxx
   #               ref: https://github.com/google/jax/issues/13559#issuecomment-1343573764
+  # torchrun是分布式训练的工具
   echo "$0: num_nodes is $num_nodes, proc_per_node is $num_gpus"
   torchrun --nnodes=$num_nodes --nproc_per_node=$num_gpus \
            --rdzv_id=$job_id --rdzv_backend="c10d" --rdzv_endpoint=$HOST_NODE_ADDR \

@@ -84,6 +84,7 @@ WENET_MODEL_CLASSES = {
 def init_model(args, configs):
 
     # TODO(xcsong): Forcefully read the 'cmvn' attribute.
+    # 如果设定了cmvn，则加载对应数据，否则为None
     if configs.get('cmvn', None) == 'global_cmvn':
         mean, istd = load_cmvn(configs['cmvn_conf']['cmvn_file'],
                                configs['cmvn_conf']['is_json_cmvn'])
@@ -93,13 +94,17 @@ def init_model(args, configs):
     else:
         global_cmvn = None
 
+    #输入维度对应fbank中的mel bins
     input_dim = configs['input_dim']
+    #输出维度对应tokenizer中的token数量
     vocab_size = configs['output_dim']
 
+    #encoder，decoder和ctc类型
     encoder_type = configs.get('encoder', 'conformer')
     decoder_type = configs.get('decoder', 'bitransformer')
     ctc_type = configs.get('ctc', 'ctc')
 
+    #设定encoder
     encoder = WENET_ENCODER_CLASSES[encoder_type](
         input_dim,
         global_cmvn=global_cmvn,
@@ -107,16 +112,19 @@ def init_model(args, configs):
         **configs['encoder_conf']['efficient_conf']
         if 'efficient_conf' in configs['encoder_conf'] else {})
 
+    #设定decoder
     decoder = WENET_DECODER_CLASSES[decoder_type](vocab_size,
                                                   encoder.output_size(),
                                                   **configs['decoder_conf'])
 
+    #设定CTC
     ctc = WENET_CTC_CLASSES[ctc_type](
         vocab_size,
         encoder.output_size(),
         blank_id=configs['ctc_conf']['ctc_blank_id']
         if 'ctc_conf' in configs else 0)
 
+    #设定model
     model_type = configs.get('model', 'asr_model')
     if model_type == "transducer":
         predictor_type = configs.get('predictor', 'rnn')
@@ -151,6 +159,7 @@ def init_model(args, configs):
                                        {}).get('special_tokens', None),
         )
     else:
+        #对于asr_model，ctl_model，whisper，k2_model，
         model = WENET_MODEL_CLASSES[model_type](
             vocab_size=vocab_size,
             encoder=encoder,

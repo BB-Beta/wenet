@@ -40,26 +40,34 @@ from wenet.utils.ctc_utils import get_blank_id
 
 
 def add_model_args(parser):
+    #配置文件路径
     parser.add_argument('--config', required=True, help='config file')
+    #模型存储路径
     parser.add_argument('--model_dir', required=True, help='save model dir')
+    #inference的时候用的checkpoint模型
     parser.add_argument('--checkpoint', help='checkpoint model')
+    #保存tensorboard信息的地址
     parser.add_argument('--tensorboard_dir',
                         default='tensorboard',
                         help='tensorboard log dir')
+    #覆盖配置，key-value的数组
     parser.add_argument('--override_config',
                         action='append',
                         default=[],
                         help="override yaml config")
+    #与训练的encoder模型
     parser.add_argument("--enc_init",
                         default=None,
                         type=str,
                         help="Pre-trained model to initialize encoder")
+    #这里猜测是分模块的预训练初始化参数
     parser.add_argument(
         '--enc_init_mods',
         default="encoder.",
         type=lambda s: [str(mod) for mod in s.split(",") if s != ""],
         help="List of encoder modules \
                         to initialize ,separated by a comma")
+    #这里猜测是分模块的预训练模型的freeze设置
     parser.add_argument(
         '--freeze_modules',
         default="",
@@ -82,20 +90,26 @@ def add_trace_args(parser):
 
 
 def add_dataset_args(parser):
+    #数据类型，处理的时候是raw还是shard模式
     parser.add_argument('--data_type',
                         default='raw',
                         choices=['raw', 'shard'],
                         help='train and cv data type')
+    #训练数据的列表文件地址
     parser.add_argument('--train_data', required=True, help='train data file')
+    #
     parser.add_argument('--cv_data', required=True, help='cv data file')
+    #并行的读取线程数量
     parser.add_argument('--num_workers',
                         default=0,
                         type=int,
                         help='num of subprocess workers for reading')
+    #使用缓存加速
     parser.add_argument('--pin_memory',
                         action='store_true',
                         default=False,
                         help='Use pinned memory buffers used for reading')
+    #预取数量
     parser.add_argument('--prefetch',
                         default=100,
                         type=int,
@@ -104,15 +118,18 @@ def add_dataset_args(parser):
 
 
 def add_ddp_args(parser):
+    #ddp的类型，nccl
     parser.add_argument('--ddp.dist_backend',
                         dest='dist_backend',
                         default='nccl',
                         choices=['nccl', 'gloo'],
                         help='distributed backend')
+    #ddp的训练方式
     parser.add_argument('--use_amp',
                         action='store_true',
                         default=False,
                         help='Use automatic mixed precision training')
+    #ddp使用fp16
     parser.add_argument('--fp16_grad_sync',
                         action='store_true',
                         default=False,
@@ -187,6 +204,7 @@ def check_modify_and_save_config(args, configs, symbol_table):
         #   ds_config.json. On the contrary, gradient accumulation / clipping should be
         #   configured in ds_config.json since they will be handled by ds automatically.
         #       ref: https://github.com/microsoft/DeepSpeed/issues/62
+        # 如果有deepspeed的配置，设定dtype类型
         with open(args.deepspeed_config, 'r') as fin:
             ds_configs = json.load(fin)
         if "fp16" in ds_configs and ds_configs["fp16"]["enabled"]:
@@ -211,9 +229,12 @@ def check_modify_and_save_config(args, configs, symbol_table):
 
     configs, _ = get_blank_id(configs, symbol_table)
 
+    #补充输入唯独为mel_bins
     configs['input_dim'] = input_dim
+    #输出唯独为tokenizer中的字典长度
     configs['output_dim'] = configs['vocab_size']
 
+    #合并args设置
     configs['train_engine'] = args.train_engine
     configs['use_amp'] = args.use_amp
     configs['model_dir'] = args.model_dir
@@ -234,15 +255,20 @@ def check_modify_and_save_config(args, configs, symbol_table):
 
 
 def init_dataset_and_dataloader(args, configs, tokenizer):
+    #dataset设置读取
     train_conf = configs['dataset_conf']
+    #cross validation配置，向dataset配置中增加spec设置
     cv_conf = copy.deepcopy(train_conf)
+    #spec对应的是spectrum
     cv_conf['speed_perturb'] = False
     cv_conf['spec_aug'] = False
     cv_conf['spec_sub'] = False
     cv_conf['spec_trim'] = False
     cv_conf['shuffle'] = False
 
+    #设置词典大小
     configs['vocab_size'] = tokenizer.vocab_size()
+    #训练数据dataset
     train_dataset = Dataset(args.data_type, args.train_data, tokenizer,
                             train_conf, True)
     cv_dataset = Dataset(args.data_type,
@@ -373,6 +399,7 @@ def trace_and_print_model(args, model):
 
 
 def init_summarywriter(args):
+    #创建model文件夹，创建writer对象，指定tensorboard文件夹
     writer = None
     if int(os.environ.get('RANK', 0)) == 0:
         os.makedirs(args.model_dir, exist_ok=True)

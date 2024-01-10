@@ -60,6 +60,7 @@ def get_args():
 @record
 def main():
     args = get_args()
+    #log配置
     logging.basicConfig(level=logging.DEBUG,
                         format='%(asctime)s %(levelname)s %(message)s')
 
@@ -67,18 +68,23 @@ def main():
     torch.manual_seed(777)
 
     # Read config
+    # 根据指定的config文件地址，家在yaml配置文件
     with open(args.config, 'r') as fin:
         configs = yaml.load(fin, Loader=yaml.FullLoader)
+    #是否有覆盖配置的设置，默认是没有的
     if len(args.override_config) > 0:
         configs = override_config(configs, args.override_config)
 
     # init tokenizer
+    # 根据yaml配置中的tokenizer来加载，包括CharTokenizer， WhisperTokenizer，BpeTokenizer，ParaformerTokenizer四种
     tokenizer = init_tokenizer(configs)
 
     # Init env for ddp OR deepspeed
+    # 初始化并行框架
     _, _, rank = init_distributed(args)
 
     # Get dataset & dataloader
+    #数据初始化
     train_dataset, cv_dataset, train_data_loader, cv_data_loader = \
         init_dataset_and_dataloader(args, configs, tokenizer)
 
@@ -93,12 +99,14 @@ def main():
     trace_and_print_model(args, model)
 
     # Tensorboard summary
+    #创建writer对象，model文件夹，指定tensorboard地址
     writer = init_summarywriter(args)
 
     # Dispatch model from cpu to gpu
     model, device = wrap_cuda_model(args, model)
 
     # Get optimizer & scheduler
+    #初始化优化器即scheduler
     model, optimizer, scheduler = init_optimizer_and_scheduler(
         args, configs, model)
 

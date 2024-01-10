@@ -3,7 +3,7 @@
 encoder: conformer
 encoder_conf:
     output_size: 256    # dimension of attention
-    attention_heads: 4
+    attention_heads: 4  #attention head数量
     linear_units: 2048  # the number of units of position-wise feed forward
     num_blocks: 12      # the number of encoder blocks
     dropout_rate: 0.1
@@ -30,73 +30,112 @@ decoder_conf:
 
 tokenizer: char
 tokenizer_conf:
+  #字典路径
   symbol_table_path: 'data/dict/lang_char.txt'
+  #使用空格切分
   split_with_space: false
+  #bpe模型的路径，SentencePieceProcessor
   bpe_path: null
+  #非语言符号的文件路径
   non_lang_syms_path: null
+  #是否多语言，用于whisper
   is_multilingual: false
+  #语言数量，用于whisper
   num_languages: 1
+  #特殊token
   special_tokens:
     <blank>: 0
     <unk>: 1
     <sos>: 2
     <eos>: 2
 
+#ctc设置
 ctc: ctc
 ctc_conf:
   ctc_blank_id: 0
 
+#是否设置了全局cmvn，如果没有该参数，则不使用
 cmvn: global_cmvn
 cmvn_conf:
   cmvn_file: 'data/train/global_cmvn'
   is_json_cmvn: true
 
 # hybrid CTC/attention
+# model类型，transducer，asr，paraformer三类
 model: asr_model
 model_conf:
+    #ctc loss的权重，如果为0，则不考虑ctc loss
     ctc_weight: 0.3
     lsm_weight: 0.1     # label smoothing option
     length_normalized_loss: false
 
 dataset: asr
 dataset_conf:
+    #数据过滤配置
     filter_conf:
+        #帧数最大值，假设10ms为一帧
         max_length: 40960
+        #帧数最小值
         min_length: 0
+        #识别的句子文本最大长度
         token_max_length: 200
+        #识别的文本最小长度
         token_min_length: 1
+    #重采样率
     resample_conf:
         resample_rate: 16000
     speed_perturb: true
+    #fbank特征配置
     fbank_conf:
+        #mel滤波器的数量，即特征数量
         num_mel_bins: 80
+        #帧移，10ms
         frame_shift: 10
+        #帧长度，25ms
         frame_length: 25
         dither: 0.1
+    #是否使用谱增强
     spec_aug: true
+    #谱增强设置，目标是将部分特征设置为0
     spec_aug_conf:
+        #mask数量
         num_t_mask: 2
+        #mask数量
         num_f_mask: 2
+        #最大长度
         max_t: 50
+        #最大长度
         max_f: 10
+    #数据shuffle，在总数据处理，以及数据分组采样的时候都会执行下shuffle
     shuffle: true
+    #shuffle的下限阈值
     shuffle_conf:
         shuffle_size: 1500
+    #是否排序
     sort: true
     sort_conf:
         sort_size: 500  # sort_size should be less than shuffle_size
+    #分batch
     batch_conf:
         batch_type: 'static' # static or dynamic
         batch_size: 16
 
+#https://www.cnblogs.com/qftie/p/16243342.html 梯度裁剪，指定梯度阈值，避免梯度爆炸
 grad_clip: 5
+#梯度累计，指定N步不进行梯度清零，计算平均梯度
 accum_grad: 4
+#最大训练的epoch
 max_epoch: 240
+
 log_interval: 100
 
+# 优化器，有adam和adamw两种可选
 optim: adam
+# 学习率
 optim_conf:
     lr: 0.002
+# 学习率自动调整方式，有warmuplr和NoamHoldAnnealing两种可选
 scheduler: warmuplr     # pytorch v1.1.0+ required
+# 学习率自动调整参数
 scheduler_conf:
     warmup_steps: 25000

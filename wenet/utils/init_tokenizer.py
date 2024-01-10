@@ -26,6 +26,7 @@ def init_tokenizer(configs) -> BaseTokenizer:
     # TODO(xcsong): Forcefully read the 'tokenizer' attribute.
     tokenizer_type = configs.get("tokenizer", "char")
     if tokenizer_type == "whisper":
+        #传入参数：
         tokenizer = WhisperTokenizer(
             multilingual=configs['tokenizer_conf']['is_multilingual'],
             num_languages=configs['tokenizer_conf']['num_languages'])

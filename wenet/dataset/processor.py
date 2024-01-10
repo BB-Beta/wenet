@@ -186,6 +186,7 @@ def filter(data,
         assert 'wav' in sample
         assert 'label' in sample
         # sample['wav'] is torch.Tensor, we have 100 frames every second
+        #这里是设定10ms为一帧，1s有100帧，wav长度除以采样率得到wav的时长是多少秒
         num_frames = sample['wav'].size(1) / sample['sample_rate'] * 100
         if num_frames < min_length:
             continue
@@ -412,12 +413,14 @@ def spec_aug(data, num_t_mask=2, num_f_mask=2, max_t=50, max_f=10, max_w=80):
         max_frames = y.size(0)
         max_freq = y.size(1)
         # time mask
+        # 将随机部分数据设置为0
         for i in range(num_t_mask):
             start = random.randint(0, max_frames - 1)
             length = random.randint(1, max_t)
             end = min(max_frames, start + length)
             y[start:end, :] = 0
         # freq mask
+        # 将随机部分数据设置为0
         for i in range(num_f_mask):
             start = random.randint(0, max_freq - 1)
             length = random.randint(1, max_f)
@@ -570,6 +573,7 @@ def dynamic_batch(data, max_frames_in_batch=12000):
         assert isinstance(sample['feat'], torch.Tensor)
         new_sample_frames = sample['feat'].size(0)
         longest_frames = max(longest_frames, new_sample_frames)
+        #这里按照最长的一条数据的frames来乘以数量，等于对所有数据按照最长的数据来padding
         frames_after_padding = longest_frames * (len(buf) + 1)
         if frames_after_padding > max_frames_in_batch:
             yield buf
